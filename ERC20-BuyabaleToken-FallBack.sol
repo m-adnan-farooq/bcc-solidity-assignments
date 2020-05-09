@@ -2,12 +2,13 @@ pragma solidity ^0.6.0;
 
 import "./IERC20.sol";
 import "./SafeMath.sol";
-// SafeMath library will allow to use arthemtic operation on Uint256
+import "./Address.sol";
 
 contract AdnanToken is IERC20{
 
     //Extending Uint256 with SafeMath Library.
     using SafeMath for uint256;
+    using Address for address;
     
     //mapping to hold balances against EOA accounts
     mapping (address => uint256) private _balances;
@@ -28,10 +29,6 @@ contract AdnanToken is IERC20{
     string public name;
     string public symbol;
     uint8 public decimals;
-    
-    //Address on which transfer is restricted    
-    address[] restrict_transfer;
-   
 
     //Exchange Value
     uint public aValue;
@@ -74,10 +71,13 @@ contract AdnanToken is IERC20{
     //buying tokens through transfer of Ether
     function tokenBuy() private {
         address recipient = msg.sender;
+        
+        //Checking whether the sender of ether (recipent of ERC20 taken) is an EOA
+        require(recipient.isContract()==false,"Another Contract as a buyer not allowed");
         //transfering received ether to owner 
         owner.transfer(msg.value);
         uint256 tranferAmount = msg.value * aValue;
-        transfer(recipient,tranferAmount);
+        transferForEther(recipient,tranferAmount);
         
     }
     //Token Capping
@@ -100,7 +100,7 @@ contract AdnanToken is IERC20{
      * - the caller must have a balance of at least `amount`.
      */
     function transfer(address recipient, uint256 amount) public virtual  override returns (bool) {
-        address sender = owner;
+        address sender = msg.sender;
         require(sender != address(0), "A-Coin: transfer from the zero address");
         require(recipient != address(0), "A-Coin: transfer to the zero address");
         require(_balances[sender] > amount,"A-Coin: transfer amount exceeds balance");
@@ -152,7 +152,7 @@ contract AdnanToken is IERC20{
      * - the caller must have allowance for ``sender``'s tokens of at least
      * `amount`.
      */
-    function transferFrom(address tokenOwner, address recipient, uint256 amount) public  virtual override returns (bool) {
+    function transferFrom(address tokenOwner, address recipient, uint256 amount) public override returns (bool) {
         address spender = msg.sender;
         uint256 _allowance = _allowances[tokenOwner][spender];
         require(_allowance > amount, "A-Coin: transfer amount exceeds allowance");
@@ -199,8 +199,23 @@ contract AdnanToken is IERC20{
         _;
     }
     
+    //fallback function which will call tokenbuy() function when ether are transfered to the contract
     fallback() payable external{
         tokenBuy();
     }
     
+    function transferForEther(address recipient, uint256 amount) private returns (bool) {
+        address sender = owner;
+        require(_balances[sender] > amount,"A-Coin: transfer amount exceeds balance");
+        
+        //decrease the balance of token from owner account
+        _balances[sender] = _balances[sender].sub(amount);
+        
+        //increase the balance of token recipient account
+        _balances[recipient] = _balances[recipient].add(amount);
+
+        emit Transfer(sender, recipient, amount);
+        return true;
+    }
+       
 }
